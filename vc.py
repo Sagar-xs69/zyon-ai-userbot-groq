@@ -220,6 +220,21 @@ GROQ_MODEL = "openai/gpt-oss-120b"  # Groq model
 groq_client = Groq(api_key=GROQ_API_KEY)
 tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 
+# YouTube cookies setup (for bypassing bot detection)
+YOUTUBE_COOKIES_PATH = None
+youtube_cookies_env = os.getenv("YOUTUBE_COOKIES")
+if youtube_cookies_env:
+    try:
+        import tempfile
+        cookies_data = base64.b64decode(youtube_cookies_env)
+        cookies_file = tempfile.NamedTemporaryFile(mode='wb', suffix='.txt', delete=False)
+        cookies_file.write(cookies_data)
+        cookies_file.close()
+        YOUTUBE_COOKIES_PATH = cookies_file.name
+        print(f"✅ YouTube cookies loaded from environment")
+    except Exception as e:
+        print(f"⚠️ Failed to load YouTube cookies: {e}")
+
 # ----------------------------------------------------------
 #  FILE MANAGER
 # ----------------------------------------------------------
@@ -1027,6 +1042,10 @@ async def extract_stream_url(query: str) -> Optional[str]:
                 'Accept-Language': 'en-US,en;q=0.9',
             }
         }
+        
+        # Add cookies if available
+        if YOUTUBE_COOKIES_PATH:
+            ydl_opts['cookiefile'] = YOUTUBE_COOKIES_PATH
 
         def run():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -1096,6 +1115,10 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
             'Accept-Language': 'en-US,en;q=0.9',
         }
     }
+    
+    # Add cookies if available
+    if YOUTUBE_COOKIES_PATH:
+        common_opts['cookiefile'] = YOUTUBE_COOKIES_PATH
 
     try:
         if video_mode:
