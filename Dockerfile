@@ -2,14 +2,21 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for py-tgcalls and voice features
+# Install system dependencies for py-tgcalls, voice features, and deno for yt-dlp
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     tesseract-ocr \
     build-essential \
     python3-dev \
     libffi-dev \
+    curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Deno for yt-dlp YouTube extraction
+RUN curl -fsSL https://deno.land/install.sh | sh
+ENV DENO_INSTALL="/root/.deno"
+ENV PATH="${DENO_INSTALL}/bin:${PATH}"
 
 # Copy requirements first for better caching
 COPY requirements.txt .
