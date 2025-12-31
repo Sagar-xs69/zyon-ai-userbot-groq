@@ -1,4 +1,4 @@
-# Reading from local file...# ------------------------------------------------------------
+# ------------------------------------------------------------
 #  ULTRA SUPER ZYON AI USERBOT – GROQ VERSION
 # ------------------------------------------------------------
 #  pip install python-dotenv telethon groq
@@ -2872,9 +2872,7 @@ pytgcalls = None
 async def main():
     global client, pytgcalls
     print("🚀 Starting ULTRA SUPER ZYON AI Userbot...")
-    print(f"    - Standard Model: {GEMINI_FLASH_MODEL}")
-    print(f"    - Pro Model: {GEMINI_PRO_MODEL}")
-    print(f"    - Image Model: {NANO_BANANA_MODEL}")
+    print(f"    - AI Model: {GROQ_MODEL}")
     print(f"    - Memory DB: {memory_manager.db_path}")
     print("🕠  Auto-reload: ENABLED (watching vc.py)")  # Add this line
     diagnose_pytgcalls()
