@@ -2040,7 +2040,7 @@ async def handle_video_commands(event, message_text: str, reply_to_msg=None) -> 
                 await client.send_message(event.chat_id, "Please provide a video name, URL, or reply to a video file with /vplay", reply_to=event.message.id, parse_mode="Markdown")
                 return True, None
 
-            await client.send_message(event.chat_id, f"📹 Searching for video '{query}'...", reply_to=event.message.id, parse_mode="Markdown")
+            proc = await client.send_message(event.chat_id, f"📹 Searching for video '{query}'...", reply_to=event.message.id, parse_mode="Markdown")
             video = await download_song(query, video_mode=True)
             if not video:
                 await proc.edit(f"❌ Could not find and download video '{query}'. Please try a different search term or URL.")
