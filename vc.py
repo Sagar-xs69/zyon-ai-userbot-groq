@@ -1077,32 +1077,46 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
             is_url = True
             break
 
+    # Common options to bypass bot detection
+    common_opts = {
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+        'ignoreerrors': True,
+        'no_color': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+    }
+
     try:
         if video_mode:
             # Video mode - download full video
             ydl_opts = {
-                'format': 'best[height<=480]/best',  # Limit quality to avoid huge files
-                'outtmpl': temp_file.replace('.mp4', '.%(ext)s'),  # Keep extension, let yt-dlp choose
-                'noplaylist': True, 'quiet': True,
-                'no_color': True
+                **common_opts,
+                'format': 'best[height<=480]/best',
+                'outtmpl': temp_file.replace('.mp4', '.%(ext)s'),
             }
         else:
             # Audio mode - extract audio only
             if is_url:
                 # Direct URL - download directly
                 ydl_opts = {
+                    **common_opts,
                     'format': 'bestaudio/best',
                     'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
                     'outtmpl': temp_file.replace('.mp3', ''),
-                    'noplaylist': True, 'quiet': True
                 }
             else:
-                # Search query - use search
+                # Search query - try SoundCloud first (no bot detection), fallback to YouTube
                 ydl_opts = {
+                    **common_opts,
                     'format': 'bestaudio/best',
                     'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
                     'outtmpl': temp_file.replace('.mp3', ''),
-                    'noplaylist': True, 'quiet': True, 'default_search': 'ytsearch1'
+                    'default_search': 'scsearch1',  # SoundCloud search - no bot detection!
                 }
 
         def run():
