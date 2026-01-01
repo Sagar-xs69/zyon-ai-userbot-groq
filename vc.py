@@ -229,6 +229,28 @@ for cookie_file in local_cookies_files:
     if os.path.exists(cookie_file):
         YOUTUBE_COOKIES_PATH = os.path.abspath(cookie_file)
         print(f"✅ YouTube cookies loaded from local file: {cookie_file}")
+        
+        # Validate cookie file
+        try:
+            file_size = os.path.getsize(YOUTUBE_COOKIES_PATH)
+            print(f"   📊 Cookie file size: {file_size} bytes")
+            
+            # Read first few lines to verify format
+            with open(YOUTUBE_COOKIES_PATH, 'r', encoding='utf-8', errors='ignore') as f:
+                first_lines = [f.readline().strip() for _ in range(5)]
+                if any('Netscape' in line or '# http' in line.lower() for line in first_lines):
+                    print(f"   ✅ Cookie file format appears valid (Netscape format)")
+                else:
+                    print(f"   ⚠️  Cookie file may not be in correct Netscape format")
+                
+            # Check file permissions
+            import stat
+            mode = os.stat(YOUTUBE_COOKIES_PATH).st_mode
+            print(f"   📁 File permissions: {stat.filemode(mode)}")
+            
+        except Exception as e:
+            print(f"   ⚠️  Error validating cookie file: {e}")
+        
         break
 
 # Fall back to environment variable if no local file found
@@ -244,10 +266,21 @@ if not YOUTUBE_COOKIES_PATH:
             YOUTUBE_COOKIES_PATH = cookies_file.name
             print(f"✅ YouTube cookies loaded from environment variable")
         except Exception as e:
-            print(f"⚠️ Failed to load YouTube cookies from env: {e}")
+            print(f"⚠️  Failed to load YouTube cookies from env: {e}")
 
 if not YOUTUBE_COOKIES_PATH:
-    print("⚠️ No YouTube cookies found - some videos may not play due to bot detection")
+    print("⚠️  No YouTube cookies found - some videos may not play due to bot detection")
+else:
+    print(f"🔐 Final YouTube cookies path: {YOUTUBE_COOKIES_PATH}")
+    # List files in current directory for debugging
+    print(f"📂 Files in current directory ({os.getcwd()}):")
+    try:
+        files = os.listdir('.') 
+        cookie_files = [f for f in files if 'cookie' in f.lower() or f.endswith('.txt')]
+        for f in cookie_files[:10]:  # Show first 10
+            print(f"   - {f}")
+    except Exception as e:
+        print(f"   Error listing files: {e}")
 
 # ----------------------------------------------------------
 #  FILE MANAGER
@@ -1044,6 +1077,7 @@ async def handle_song_request(text: str) -> Tuple[bool, Optional[str]]:
 
 async def extract_stream_url(query: str) -> Optional[str]:
     """Extract direct stream URL from YouTube live streams for streaming instead of downloading"""
+    logger.info(f"extract_stream_url called for: '{query}'")
     try:
         ydl_opts = {
             'format': 'best[height<=720]/best',
@@ -1060,6 +1094,9 @@ async def extract_stream_url(query: str) -> Optional[str]:
         # Add cookies if available
         if YOUTUBE_COOKIES_PATH:
             ydl_opts['cookiefile'] = YOUTUBE_COOKIES_PATH
+            logger.info(f"Using YouTube cookies for stream extraction: {YOUTUBE_COOKIES_PATH}")
+        else:
+            logger.warning("No YouTube cookies available for stream extraction")
 
         def run():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -1083,11 +1120,14 @@ async def extract_stream_url(query: str) -> Optional[str]:
 
         return None
     except Exception as e:
-        logger.error(f"Stream extraction error: {e}")
+        logger.error(f"Stream extraction error for '{query}': {e}")
+        logger.error(f"Full error traceback:", exc_info=True)
         return None
 
 async def download_song(query: str, video_mode: bool = False, stream_mode: bool = False) -> Optional[Dict]:
     """Download song or video for playback"""
+    logger.info(f"download_song called: query='{query}', video_mode={video_mode}, stream_mode={stream_mode}")
+    
     # Use video format if video_mode is True, otherwise audio
     temp_suffix = '.mp4' if video_mode else '.mp3'
     temp_file = tempfile.mktemp(suffix=temp_suffix)
@@ -1133,10 +1173,14 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
     # Add cookies if available
     if YOUTUBE_COOKIES_PATH:
         common_opts['cookiefile'] = YOUTUBE_COOKIES_PATH
+        logger.info(f"Using YouTube cookies from: {YOUTUBE_COOKIES_PATH}")
+    else:
+        logger.warning("No YouTube cookies available - may encounter bot detection")
 
     try:
         if video_mode:
             # Video mode - download full video
+            logger.info(f"Video mode: downloading video for '{query}'")
             ydl_opts = {
                 **common_opts,
                 'format': 'best[height<=480]/best',
@@ -1208,7 +1252,9 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
 
         return None
     except Exception as e:
-        logger.error(f"Song-download error: {e}")
+        logger.error(f"Song download error for '{query}' (video_mode={video_mode}): {e}")
+        logger.error(f"Full error traceback:", exc_info=True)
+        return Noned error: {e}")
         logger.error(f"Query was: {query}")
         if os.path.exists(temp_file):
             os.unlink(temp_file)
@@ -2052,7 +2098,7 @@ async def handle_video_commands(event, message_text: str, reply_to_msg=None) -> 
         if reply_to_msg and hasattr(reply_to_msg, 'document') and reply_to_msg.document and reply_to_msg.document.mime_type:
             mime = reply_to_msg.document.mime_type.lower()
             if mime.startswith('video/'):
-                await client.send_message(event.chat_id, "📹 Downloading your video file...", reply_to=event.message.id, parse_mode="Markdown")
+                proc = await client.send_message(event.chat_id, "📹 Downloading your video file...", reply_to=event.message.id, parse_mode="Markdown")
                 try:
                     ext = '.mp4'
                     if 'webm' in mime: ext = '.webm'
