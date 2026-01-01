@@ -1254,8 +1254,6 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
     except Exception as e:
         logger.error(f"Song download error for '{query}' (video_mode={video_mode}): {e}")
         logger.error(f"Full error traceback:", exc_info=True)
-        return Noned error: {e}")
-        logger.error(f"Query was: {query}")
         if os.path.exists(temp_file):
             os.unlink(temp_file)
         return None
