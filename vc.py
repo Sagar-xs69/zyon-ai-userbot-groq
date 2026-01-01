@@ -2414,7 +2414,6 @@ async def handle_voice_commands(event, message_text: str, reply_to_msg=None) -> 
                 await pytgcalls.play(chat_id, stream)
                 active_chats[chat_id]['current'] = next_song['path']
                 await client.send_message(event.chat_id, f"Skipped to next: **{next_song['title']}** by *{next_song['artist']}*", reply_to=event.message.id, parse_mode="Markdown")
-                asyncio.create_task(monitor_stream(chat_id, next_song))
             except Exception as e:
                 logger.error(f"Skip play error: {e}")
                 await client.send_message(event.chat_id, "Failed to play next song.", reply_to=event.message.id, parse_mode="Markdown")
@@ -3015,15 +3014,9 @@ async def main():
     if PYTG_CALLS_AVAILABLE:
         try:
             pytgcalls = PyTgCalls(client)
-            
-            # Register stream end event handler for automatic queue playback
-            @pytgcalls.on_stream_end()
-            async def on_stream_end_handler(client_id, chat_id, update):
-                await handle_stream_end(client_id, chat_id, update)
-            
             await pytgcalls.start()
             print("✅ Voice Call Engine is ready.")
-            print("✅ Auto-queue playback enabled")
+            print("✅ Queue system enabled (use /skip to play next song)")
         except Exception as e:
             print(f"⚠️  Voice Call Engine failed: {e}")
             pytgcalls = None
