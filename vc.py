@@ -1193,7 +1193,7 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
                 ydl_opts = {
                     **common_opts,
                     'format': 'bestaudio/best',
-                    'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
+                    'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}],
                     'outtmpl': temp_file.replace('.mp3', ''),
                     'merge_output_format': 'mp4',  # Ensure FFmpeg can merge if needed
                 }
@@ -1202,7 +1202,7 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
                 ydl_opts = {
                     **common_opts,
                     'format': 'bestaudio/best',
-                    'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
+                    'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}],
                     'outtmpl': temp_file.replace('.mp3', ''),
                     'default_search': 'scsearch1',  # SoundCloud search - no bot detection!
                 }
@@ -2044,33 +2044,54 @@ async def safe_music_cleanup():
 
         await asyncio.sleep(60)  # Run cleanup every minute
 
-async def monitor_stream(chat_id: int, current_song: dict):
+async def handle_stream_end(client_id: int, chat_id: int, update):
+    """Automatically play next song when current stream ends"""
     try:
-        duration = current_song.get('duration', 300)
-        await asyncio.sleep(duration + 10)
-        if active_chats[chat_id]['current'] == current_song['path']:
-            if active_chats[chat_id]['queue']:
-                next_song = active_chats[chat_id]['queue'].popleft()
+        logger.info(f"Stream ended in chat {chat_id}")
+        
+        # Check if there are more songs in the queue
+        if active_chats[chat_id]['queue']:
+            next_song = active_chats[chat_id]['queue'].popleft()
+            try:
+                logger.info(f"Auto-playing next song: {next_song['title']}")
+                stream = MediaStream(next_song['path'])
+                await pytgcalls.play(chat_id, stream)
+                active_chats[chat_id]['current'] = next_song['path']
+                
+                # Send notification to chat
                 try:
-                    stream = MediaStream(next_song['path'])
-                    await pytgcalls.play(chat_id, stream)
-                    active_chats[chat_id]['current'] = next_song['path']
-                    asyncio.create_task(monitor_stream(chat_id, next_song))
-                except Exception as e:
-                    logger.error(f"Auto-play error: {e}")
-            else:
-                # No more songs in queue, leave voice chat and clean up
+                    await client.send_message(chat_id, 
+                        f"🎵 Now playing: **{next_song['title']}**\n"
+                        f"👤 Artist: {next_song.get('artist', 'Unknown')}")
+                except:
+                    pass  # Don't fail if we can't send message
+                    
+            except Exception as e:
+                logger.error(f"Auto-play error: {e}")
+                # Clean up and leave on error
                 try:
                     await pytgcalls.leave_call(chat_id)
                     active_chats.pop(chat_id, None)
-                    logger.info(f"Left voice chat {chat_id} - queue empty")
-                except Exception as e:
-                    logger.error(f"Error leaving voice chat {chat_id}: {e}")
-
-            # Schedule file for later cleanup instead of deleting immediately
-            pending_music_cleanup.append(current_song['path'])
+                except:
+                    pass
+        else:
+            # No more songs in queue, leave voice chat
+            try:
+                await pytgcalls.leave_call(chat_id)
+                active_chats.pop(chat_id, None)
+                logger.info(f"Queue finished - left voice chat {chat_id}")
+                
+                # Notify chat that playback ended
+                try:
+                    await client.send_message(chat_id, 
+                        "✅ Playback finished. Queue is empty.")
+                except:
+                    pass
+            except Exception as e:
+                logger.error(f"Error leaving voice chat {chat_id}: {e}")
+                
     except Exception as e:
-        logger.error(f"Stream-monitor error: {e}")
+        logger.error(f"Stream-end handler error: {e}")
 
 async def handle_video_commands(event, message_text: str, reply_to_msg=None) -> Tuple[bool, Optional[str]]:
     """Handle video play commands"""
@@ -2988,8 +3009,15 @@ async def main():
     if PYTG_CALLS_AVAILABLE:
         try:
             pytgcalls = PyTgCalls(client)
+            
+            # Register stream end event handler for automatic queue playback
+            @pytgcalls.on_stream_end()
+            async def on_stream_end_handler(client_id, chat_id, update):
+                await handle_stream_end(client_id, chat_id, update)
+            
             await pytgcalls.start()
             print("✅ Voice Call Engine is ready.")
+            print("✅ Auto-queue playback enabled")
         except Exception as e:
             print(f"⚠️  Voice Call Engine failed: {e}")
             pytgcalls = None
