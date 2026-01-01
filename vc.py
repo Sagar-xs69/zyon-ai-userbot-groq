@@ -1244,9 +1244,19 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
                         break
 
         if output_file:
+            # Get accurate duration using pydub
+            actual_duration = int(entry.get('duration', 0))
+            try:
+                # Calculate exact duration from file to prevent cutting off
+                audio = AudioSegment.from_file(output_file)
+                actual_duration = audio.duration_seconds
+                logger.info(f"✅ Accurate duration for {output_file}: {actual_duration}s")
+            except Exception as e:
+                logger.warning(f"Could not calculate accurate duration, using metadata: {e}")
+
             return {"path": output_file, "title": entry.get('title', 'Unknown'),
                     "artist": entry.get('artist') or entry.get('uploader', 'Unknown'),
-                    "duration": int(entry.get('duration', 0)),
+                    "duration": actual_duration,
                     "thumbnail": entry.get('thumbnail'),
                     "url": query if is_url else None,
                     "is_video": video_mode}
@@ -2050,9 +2060,11 @@ async def monitor_stream(chat_id: int, current_song: dict):
         if not current_song.get('is_live'):
             duration = current_song.get('duration', 0)
             if duration > 0:
-                # Wait for song duration + small buffer
-                await asyncio.sleep(duration + 2)
+                logger.info(f"⏳ Monitoring stream for {duration}s (+10s buffer)")
+                # Wait for song duration + generous buffer
+                await asyncio.sleep(duration + 10)
             else:
+                logger.warning("⚠️ Unknown duration, waiting 180s fallback")
                 await asyncio.sleep(180) # Fallback for unknown duration
         else:
             return # Don't monitor live streams
