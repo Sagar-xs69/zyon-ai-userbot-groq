@@ -3,7 +3,7 @@ python-dotenv>=1.0.0
 telethon>=1.33.0
 groq>=0.4.0
 tavily-python>=0.3.0
-yt-dlp>=2023.10.13
+yt-dlp  # Always install latest version to handle YouTube format changes
 pillow>=10.0.0
 pytesseract>=0.3.10
 pydub>=0.25.1
