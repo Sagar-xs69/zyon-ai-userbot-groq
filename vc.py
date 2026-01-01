@@ -1183,7 +1183,7 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
             logger.info(f"Video mode: downloading video for '{query}'")
             ydl_opts = {
                 **common_opts,
-                'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]/bestvideo+bestaudio/best',
+                'format': 'best',  # Just download whatever is available
                 'outtmpl': temp_file.replace('.mp4', '.%(ext)s'),
             }
         else:
