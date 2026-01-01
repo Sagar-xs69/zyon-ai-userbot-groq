@@ -1193,7 +1193,7 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
                 ydl_opts = {
                     **common_opts,
                     'format': 'bestaudio/best',
-                    'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}],
+                    'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '128'}],
                     'outtmpl': temp_file.replace('.mp3', ''),
                     'merge_output_format': 'mp4',  # Ensure FFmpeg can merge if needed
                 }
@@ -1202,7 +1202,7 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
                 ydl_opts = {
                     **common_opts,
                     'format': 'bestaudio/best',
-                    'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}],
+                    'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '128'}],
                     'outtmpl': temp_file.replace('.mp3', ''),
                     'default_search': 'scsearch1',  # SoundCloud search - no bot detection!
                 }
@@ -2044,54 +2044,61 @@ async def safe_music_cleanup():
 
         await asyncio.sleep(60)  # Run cleanup every minute
 
-async def handle_stream_end(client_id: int, chat_id: int, update):
-    """Automatically play next song when current stream ends"""
+async def monitor_stream(chat_id: int, current_song: dict):
+    """Monitor playing song and auto-play next in queue"""
     try:
-        logger.info(f"Stream ended in chat {chat_id}")
+        if not current_song.get('is_live'):
+            duration = current_song.get('duration', 0)
+            if duration > 0:
+                # Wait for song duration + small buffer
+                await asyncio.sleep(duration + 2)
+            else:
+                await asyncio.sleep(180) # Fallback for unknown duration
+        else:
+            return # Don't monitor live streams
+
+        # Check if we are still playing the same song
+        start_path = current_song['path']
+        current_path = active_chats.get(chat_id, {}).get('current')
         
-        # Check if there are more songs in the queue
-        if active_chats[chat_id]['queue']:
-            next_song = active_chats[chat_id]['queue'].popleft()
-            try:
-                logger.info(f"Auto-playing next song: {next_song['title']}")
-                stream = MediaStream(next_song['path'])
-                await pytgcalls.play(chat_id, stream)
-                active_chats[chat_id]['current'] = next_song['path']
-                
-                # Send notification to chat
+        if current_path == start_path:
+            if active_chats[chat_id]['queue']:
+                next_song = active_chats[chat_id]['queue'].popleft()
                 try:
-                    await client.send_message(chat_id, 
-                        f"🎵 Now playing: **{next_song['title']}**\n"
-                        f"👤 Artist: {next_song.get('artist', 'Unknown')}")
-                except:
-                    pass  # Don't fail if we can't send message
+                    stream = MediaStream(next_song['path'])
+                    await pytgcalls.play(chat_id, stream)
+                    active_chats[chat_id]['current'] = next_song['path']
+                    await client.send_message(chat_id, f"🎵 Auto-playing: **{next_song['title']}**")
                     
-            except Exception as e:
-                logger.error(f"Auto-play error: {e}")
-                # Clean up and leave on error
+                    # Clean up old file
+                    if os.path.exists(start_path):
+                        try:
+                            os.unlink(start_path)
+                        except:
+                            pass
+                            
+                    # Monitor next song
+                    asyncio.create_task(monitor_stream(chat_id, next_song))
+                except Exception as e:
+                    logger.error(f"Auto-play error: {e}")
+            else:
+                # Queue empty - stay in VC for a bit or leave?
+                # User prefers it behaves nicely. Let's leave.
                 try:
                     await pytgcalls.leave_call(chat_id)
                     active_chats.pop(chat_id, None)
+                    await client.send_message(chat_id, "✅ Queue finished. Left voice chat.")
+                    # Clean up last file
+                    if os.path.exists(start_path):
+                        os.unlink(start_path)
                 except:
                     pass
-        else:
-            # No more songs in queue, leave voice chat
-            try:
-                await pytgcalls.leave_call(chat_id)
-                active_chats.pop(chat_id, None)
-                logger.info(f"Queue finished - left voice chat {chat_id}")
-                
-                # Notify chat that playback ended
-                try:
-                    await client.send_message(chat_id, 
-                        "✅ Playback finished. Queue is empty.")
-                except:
-                    pass
-            except Exception as e:
-                logger.error(f"Error leaving voice chat {chat_id}: {e}")
-                
     except Exception as e:
-        logger.error(f"Stream-end handler error: {e}")
+        logger.error(f"Stream-monitor error: {e}")
+
+async def handle_stream_end(client_id: int, chat_id: int, update):
+    # Deprecated - using monitor_stream instead
+    pass
 
 async def handle_video_commands(event, message_text: str, reply_to_msg=None) -> Tuple[bool, Optional[str]]:
     """Handle video play commands"""
@@ -2159,6 +2166,10 @@ async def handle_video_commands(event, message_text: str, reply_to_msg=None) -> 
             # Play immediately
             await proc.edit("📹 Video ready. Attempting to join voice chat...")
             try:
+                if not pytgcalls:
+                    await proc.edit("❌ Voice chat engine not initialized. Please restart the bot.")
+                    return True, None
+                    
                 stream = MediaStream(video_reply['path'])
                 await pytgcalls.play(chat_id, stream)
                 active_chats[chat_id]['current'] = video_reply['path']
@@ -2224,6 +2235,10 @@ async def handle_voice_commands(event, message_text: str, reply_to_msg=None) -> 
                 await proc.edit(f"🔴 Added live stream to queue: **{stream_entry['title']}**")
             else:
                 # Stream immediately
+                if not pytgcalls:
+                    await proc.edit("❌ Voice chat engine not initialized. Please restart the bot.")
+                    return True, None
+                    
                 await pytgcalls.play(chat_id, stream_url)  # Pass URL directly for live streams
                 active_chats[chat_id]['current'] = stream_entry['path']
                 await proc.edit(f"🔴 **Now streaming live:** {stream_entry['title']}\n\n⚠️  **Note:** This is a live stream and may continue indefinitely.")
@@ -2302,6 +2317,7 @@ async def handle_voice_commands(event, message_text: str, reply_to_msg=None) -> 
                     await pytgcalls.play(chat_id, stream)
                     active_chats[chat_id]['current'] = song_reply['path']
                     await proc_file.edit(f"🎵 Now playing: **{song_reply['title']}** by *{song_reply['artist']}*")
+                    asyncio.create_task(monitor_stream(chat_id, song_reply))
                 except NoActiveGroupCall:
                     await proc_file.edit("❌ No active voice chat found in this group. Please start a voice chat first.")
                     if os.path.exists(song_reply['path']):
@@ -2348,6 +2364,7 @@ async def handle_voice_commands(event, message_text: str, reply_to_msg=None) -> 
                 await pytgcalls.play(chat_id, stream)
                 active_chats[chat_id]['current'] = song['path']
                 await proc.edit(f"🎵 Now playing: **{song['title']}** by *{song['artist']}*")
+                asyncio.create_task(monitor_stream(chat_id, song))
             except NoActiveGroupCall:
                 await proc.edit("❌ No active voice chat found in this group. Please start a voice chat first.")
                 if os.path.exists(song['path']):
@@ -2414,6 +2431,7 @@ async def handle_voice_commands(event, message_text: str, reply_to_msg=None) -> 
                 await pytgcalls.play(chat_id, stream)
                 active_chats[chat_id]['current'] = next_song['path']
                 await client.send_message(event.chat_id, f"Skipped to next: **{next_song['title']}** by *{next_song['artist']}*", reply_to=event.message.id, parse_mode="Markdown")
+                asyncio.create_task(monitor_stream(chat_id, next_song))
             except Exception as e:
                 logger.error(f"Skip play error: {e}")
                 await client.send_message(event.chat_id, "Failed to play next song.", reply_to=event.message.id, parse_mode="Markdown")
