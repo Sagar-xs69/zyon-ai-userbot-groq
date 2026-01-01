@@ -1189,12 +1189,13 @@ async def download_song(query: str, video_mode: bool = False, stream_mode: bool 
         else:
             # Audio mode - extract audio only
             if is_url:
-                # Direct URL - download directly
+                # Direct URL - download directly with flexible format
                 ydl_opts = {
                     **common_opts,
                     'format': 'bestaudio/best',
                     'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
                     'outtmpl': temp_file.replace('.mp3', ''),
+                    'merge_output_format': 'mp4',  # Ensure FFmpeg can merge if needed
                 }
             else:
                 # Search query - try SoundCloud first (no bot detection), fallback to YouTube
