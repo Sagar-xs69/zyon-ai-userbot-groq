@@ -28,5 +28,5 @@ COPY youtube_cookies.txt .
 # Copy application files
 COPY . .
 
-# Run the bot
-CMD ["python", "vc.py"]
+# Run the bot with unbuffered output
+CMD ["python", "-u", "vc.py"]
