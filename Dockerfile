@@ -22,6 +22,9 @@ ENV PATH="${DENO_INSTALL}/bin:${PATH}"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy YouTube cookies explicitly to ensure they are present
+COPY youtube_cookies.txt .
+
 # Copy application files
 COPY . .
 
