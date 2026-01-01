@@ -2294,11 +2294,14 @@ async def handle_voice_commands(event, message_text: str, reply_to_msg=None) -> 
             else:
                 proc_file = await client.send_message(event.chat_id, "🎵 File ready. Attempting to join voice chat...", reply_to=event.message.id, parse_mode="Markdown")
                 try:
+                    if not pytgcalls:
+                        await proc_file.edit("❌ Voice chat engine not initialized. Please restart the bot.")
+                        return True, None
+                    
                     stream = MediaStream(song_reply['path'])
                     await pytgcalls.play(chat_id, stream)
                     active_chats[chat_id]['current'] = song_reply['path']
                     await proc_file.edit(f"🎵 Now playing: **{song_reply['title']}** by *{song_reply['artist']}*")
-                    asyncio.create_task(monitor_stream(chat_id, song_reply))
                 except NoActiveGroupCall:
                     await proc_file.edit("❌ No active voice chat found in this group. Please start a voice chat first.")
                     if os.path.exists(song_reply['path']):
@@ -2337,11 +2340,14 @@ async def handle_voice_commands(event, message_text: str, reply_to_msg=None) -> 
             # Play immediately
             await proc.edit("✅ Song ready. Attempting to join voice chat...")
             try:
+                if not pytgcalls:
+                    await proc.edit("❌ Voice chat engine not initialized. Please restart the bot.")
+                    return True, None
+                    
                 stream = MediaStream(song['path'])
                 await pytgcalls.play(chat_id, stream)
                 active_chats[chat_id]['current'] = song['path']
                 await proc.edit(f"🎵 Now playing: **{song['title']}** by *{song['artist']}*")
-                asyncio.create_task(monitor_stream(chat_id, song))
             except NoActiveGroupCall:
                 await proc.edit("❌ No active voice chat found in this group. Please start a voice chat first.")
                 if os.path.exists(song['path']):
